@@ -24,13 +24,13 @@ namespace MigraDoc.Extensions.Html
                 return nodeHandlers;
             }
         }
-        
-        public Action<Section> Convert(string contents)
+
+        public Action<DocumentObject> Convert(string contents)
         {
             return section => ConvertHtml(contents, section);
         }
 
-        private void ConvertHtml(string html, Section section)
+        private void ConvertHtml(string html, DocumentObject section)
         {
             if (string.IsNullOrEmpty(html))
             {

@@ -19,5 +19,21 @@ namespace MigraDoc.Extensions
             paragraph.Style = style;
             return paragraph;
         }
+
+        public static Paragraph Add(this Paragraph paragraph, string contents, IConverter converter)
+        {
+            if (string.IsNullOrEmpty(contents))
+            {
+                throw new ArgumentNullException("contents");
+            }
+            if (converter == null)
+            {
+                throw new ArgumentNullException("converter");
+            }
+
+            var addAction = converter.Convert(contents);
+            addAction(paragraph);
+            return paragraph;
+        }
     }
 }

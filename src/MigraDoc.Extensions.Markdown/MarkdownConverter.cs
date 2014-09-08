@@ -26,8 +26,8 @@ namespace MigraDoc.Extensions.Markdown
 
             this.options = options;
         }
-        
-        public Action<Section> Convert(string contents)
+
+        public Action<DocumentObject> Convert(string contents)
         {
             var converter = new MarkdownSharp.Markdown(options);
             var html = converter.Transform(contents);

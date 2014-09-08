@@ -5,6 +5,6 @@ namespace MigraDoc.Extensions
 {
     public interface IConverter
     {
-        Action<Section> Convert(string contents);
+        Action<DocumentObject> Convert(string contents);
     }
 }
