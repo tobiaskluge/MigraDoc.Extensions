@@ -46,7 +46,7 @@ Import the `MigraDoc.Extensions.Html` namespace and call `AddHtml` on a MigraDoc
 			<li>List Item 3</li>
 		</ul>
 
-		<p>Pretty cool huh?</p>
+		<p>Pretty <span class="mystyle">cool</span> huh?</p>
 	";
 
 	section.AddHtml(html);
@@ -64,6 +64,7 @@ The HTML converter currently supports the following:
 - Line breaks 
 - Inline elements `<strong>`, `<em>`, `<i>`, `<u>`
 - Horizontal Rules - Adds a paragraph with style "HorizontalRule"
+- Span elements with class will be converted to a formatted text and the style will be set to the span class value; e.g. <span class="myclass">abc</span> will be converted into a fragment abc with the style "myclass"; you can define the style inside your code and configure it as you need (e.g. font size, color, ...)
 
 For more details, check out the [specs](https://github.com/benfoster/MigraDoc.Extensions/blob/master/src/specs/MigraDoc.Extensions.Html.Specs/converting_tags.cs).
 
