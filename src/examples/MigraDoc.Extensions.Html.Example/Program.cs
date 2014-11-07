@@ -103,6 +103,11 @@ namespace MigraDoc.Extensions.Html.Example
             hr.ParagraphFormat.Borders.Bottom = hrBorder;
             hr.ParagraphFormat.LineSpacing = 0;
             hr.ParagraphFormat.SpaceBefore = 15;
+
+            // some sample style
+            var sampleStyle = doc.AddStyle("sample_style", "Normal");
+            sampleStyle.Font.Color = new Color(255, 0, 0);
+            sampleStyle.Font.Size = 22;
         }
     }
 }

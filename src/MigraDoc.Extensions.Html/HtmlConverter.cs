@@ -99,6 +99,16 @@ namespace MigraDoc.Extensions.Html
             {
                 return GetParagraph(parent).AddHyperlink(node.GetAttributeValue("href", ""), HyperlinkType.Web);
             });
+            nodeHandlers.Add("span", (node, parent) =>
+            {
+                var p = GetParagraph(parent).AddFormattedText(TextFormat.NoUnderline);
+                var cssClass = node.Attributes["class"];
+                if (!string.IsNullOrEmpty(cssClass.Value))
+                {
+                    p.Style = cssClass.Value;
+                }
+                return p;
+            });
             nodeHandlers.Add("hr", (node, parent) => GetParagraph(parent).SetStyle("HorizontalRule"));
             nodeHandlers.Add("br", (node, parent) => {
                 if (parent is FormattedText)
