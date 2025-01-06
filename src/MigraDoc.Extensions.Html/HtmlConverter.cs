@@ -49,11 +49,16 @@ namespace MigraDoc.Extensions.Html
 
         private void ConvertHtmlNodes(HtmlNodeCollection nodes, DocumentObject section, DocumentObject current = null)
         {
+            DocumentObject previous = null;
             foreach (var node in nodes)
             {
                 Func<HtmlNode, DocumentObject, DocumentObject> nodeHandler;
                 if (nodeHandlers.TryGetValue(node.Name, out nodeHandler))
                 {
+                    if (node.PreviousSibling != null && node.PreviousSibling.Name == "#text" && previous != null && previous is Paragraph)
+                    {
+                        current = (previous as Paragraph);
+                    }
                     // pass the current container or section
                     var result = nodeHandler(node, current ?? section);
                     
@@ -61,6 +66,12 @@ namespace MigraDoc.Extensions.Html
                     {
                         ConvertHtmlNodes(node.ChildNodes, section, result);
                     }
+                    if (node.NextSibling != null && node.NextSibling.Name == "span")
+                    {
+                        // MISSING: mit vorherigem Paragraph zusammenfügen / Text anhängen
+           //             ConvertHtmlNodes(new HtmlNodeCollection() { node.NextSibling }, section, result)};
+                    }
+                    previous = result;
                 }
                 else
                 {
@@ -84,14 +95,13 @@ namespace MigraDoc.Extensions.Html
             nodeHandlers.Add("h5", AddHeading);
             nodeHandlers.Add("h6", AddHeading);
 
-            nodeHandlers.Add("p", (node, parent) =>
-            {
-                return ((Section)parent).AddParagraph();
-            });
+            nodeHandlers.Add("p", AddParagraph);
+            nodeHandlers.Add("div", AddParagraph);
 
             // Inline Elements
 
             nodeHandlers.Add("strong", (node, parent) => AddFormattedText(node, parent, TextFormat.Bold));
+            nodeHandlers.Add("bold", (node, parent) => AddFormattedText(node, parent, TextFormat.Bold));
             nodeHandlers.Add("i", (node, parent) => AddFormattedText(node, parent, TextFormat.Italic));
             nodeHandlers.Add("em", (node, parent) => AddFormattedText(node, parent, TextFormat.Italic));
             nodeHandlers.Add("u", (node, parent) => AddFormattedText(node, parent, TextFormat.Underline));
@@ -101,9 +111,10 @@ namespace MigraDoc.Extensions.Html
             });
             nodeHandlers.Add("span", (node, parent) =>
             {
+                if (node.InnerText == "&nbsp;") return parent;
                 var p = GetParagraph(parent).AddFormattedText(TextFormat.NoUnderline);
                 var cssClass = node.Attributes["class"];
-                if (!string.IsNullOrEmpty(cssClass.Value))
+                if (cssClass != null && !string.IsNullOrEmpty(cssClass.Value) && cssClass.Value != "style_color_0_0_0")
                 {
                     p.Style = cssClass.Value;
                 }
@@ -111,13 +122,26 @@ namespace MigraDoc.Extensions.Html
             });
             nodeHandlers.Add("hr", (node, parent) => GetParagraph(parent).SetStyle("HorizontalRule"));
             nodeHandlers.Add("br", (node, parent) => {
+                if (node.NextSibling == null) return parent; // do not add a line break if last element in parent group
+                if (node.NextSibling.Name == "ul" || node.NextSibling.Name == "ol") return parent; // do not add a line break if list is next element
                 if (parent is FormattedText)
                 {
                     // inline elements can contain line breaks
                     ((FormattedText)parent).AddLineBreak();
                     return parent;
                 }
-                                
+                if (parent is Paragraph)
+                {
+                    // inline elements can contain line breaks
+                    ((Paragraph)parent).AddLineBreak();
+                    return parent;
+                }
+                if (parent is Section)
+                {
+                    // section add empty line break => not good/results in error?
+                    if(node.NextSibling.Name != "br") return parent;
+                }       
+   
                 var paragraph = GetParagraph(parent);
                 paragraph.AddLineBreak();
                 return paragraph;
@@ -125,24 +149,41 @@ namespace MigraDoc.Extensions.Html
 
             nodeHandlers.Add("li", (node, parent) =>
             {
-                var listStyle = node.ParentNode.Name == "ul"
+                var listStyle = node.ParentNode.Name.ToLower().Trim() == "ul"
                     ? "UnorderedList"
                     : "OrderedList";
 
-                var section = (Section)parent;
                 var isFirst = node.ParentNode.Elements("li").First() == node;
-                var isLast = node.ParentNode.Elements("li").Last() == node; 
-
+                var isLast = node.ParentNode.Elements("li").Last() == node;
+                
+                Section section;
+                if (parent is Paragraph)
+                {
+                    section = parent.Section;
+                }
+                else // if (parent is Section)
+                {
+                    section = (Section) parent;
+                }
                 // if this is the first item add the ListStart paragraph
                 if (isFirst)
                 {
                     section.AddParagraph().SetStyle("ListStart");
                 }
 
-                var listItem = section.AddParagraph().SetStyle(listStyle);
+                Paragraph listItem = section.AddParagraph().SetStyle(listStyle);
 
                 // disable continuation if this is the first list item
                 listItem.Format.ListInfo.ContinuePreviousList = !isFirst;
+                // add list style/layout                
+                if (listStyle == "OrderedList")
+                {
+                    listItem.Format.ListInfo.ListType = ListType.NumberList1;
+                }
+                else
+                {
+                    listItem.Format.ListInfo.ListType = ListType.BulletList1;
+                }
 
                 // if the this is the last item add the ListEnd paragraph
                 if (isLast)
@@ -178,8 +219,50 @@ namespace MigraDoc.Extensions.Html
                 }
 
                 // otherwise a section or paragraph
-                return GetParagraph(parent).AddText(innerText);
+                var res = GetParagraph(parent);
+                res.AddText(innerText);
+                return res;
             });
+        }
+
+        private DocumentObject AddParagraph(HtmlNode node, DocumentObject parent)
+        {
+            Paragraph res;
+            res = (parent is Paragraph) ? (parent.Section.AddParagraph()) : ((Section) parent).AddParagraph();
+            var styleAttrib = node.Attributes["style"];
+            if (styleAttrib != null && !string.IsNullOrEmpty(styleAttrib.Value))
+            {
+                string styleAttibute = styleAttrib.Value.ToLower().Trim();
+                const string textAlignMatch = "text-align:";
+                if (styleAttibute.Contains(textAlignMatch)) // match paragraph align
+                {
+                    int textAlignFrom = styleAttibute.IndexOf(textAlignMatch, StringComparison.InvariantCultureIgnoreCase) + textAlignMatch.Length;
+                    int textAlignTo = styleAttibute.IndexOf(";", textAlignFrom, StringComparison.InvariantCultureIgnoreCase);
+                    if (textAlignTo < textAlignFrom) textAlignTo = styleAttibute.Length;
+                    string textAlign = styleAttrib.Value.Substring(textAlignFrom, textAlignTo - textAlignFrom).Trim();
+                    SetParagraphAlignment(res, textAlign);
+                }
+            }
+            return res;
+        }
+
+        private static void SetParagraphAlignment(Paragraph res, string textAlign)
+        {
+            switch (textAlign.ToLower())
+            {
+                case "center":
+                    res.Format.Alignment = ParagraphAlignment.Center;
+                    break;
+                case "left":
+                    res.Format.Alignment = ParagraphAlignment.Left;
+                    break;
+                case "right":
+                    res.Format.Alignment = ParagraphAlignment.Right;
+                    break;
+                case "justify":
+                    res.Format.Alignment = ParagraphAlignment.Justify;
+                    break;
+            }
         }
 
         private static DocumentObject AddFormattedText(HtmlNode node, DocumentObject parent, TextFormat format)
